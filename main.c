@@ -34,19 +34,16 @@ void disable_raw_mode()
     printf("\033[?1049l\033[?25h");
     fflush(stdout);
 }
+
 enum SnakePart {
     SNAKE_HEAD = 1,
     SNAKE_BODY = 2,
     SNAKE_TAIL = 3,
 };
 
-enum Direction {
-    DIRECTION_UP = 'w',
-    DIRECTION_DOWN = 's',
-    DIRECTION_LEFT = 'a',
-    DIRECTION_RIGHT = 'd',
-};
+typedef struct SnakeBody {
 
+};
 void start_tick_loop(int frequency)
 {
     long long interval_ns = 1000000000LL / frequency;
@@ -56,7 +53,7 @@ void start_tick_loop(int frequency)
         .tv_nsec = interval_ns % 1000000000LL
     };
 
-    char ultima_tecla = 'w';
+    char ultima_tecla = 'l';
 
     int counter = 0;
 
@@ -69,11 +66,16 @@ void start_tick_loop(int frequency)
     while (1) {
         limpaTela();
         bool found = false;
+        bool gameOver = false;
 
         ssize_t result = read(STDIN_FILENO, &ultima_tecla, 1);
 
         if (result < 0) {
             printf("\033[H\033[2J");
+        }
+
+        if (ultima_tecla == 'r') {
+            matriz[27][9] = SNAKE_HEAD;
         }
         printf("total de frames: %d\n", counter);
         counter++;
@@ -84,10 +86,12 @@ void start_tick_loop(int frequency)
          * **/
         for (int i = 0; i < 40; i++) {
             for (int j = 0; j < 40; j++) {
+                if (matriz[i][j] == 0) {}
                 /**
                  * Esse IF sinaliza que encontramos a posição da SNAKE_HEAD na matriz.
                  * **/
                 if (matriz[i][j] ==  SNAKE_HEAD) {
+
                     /**
                      * E agora que encontramos, precisamos manipular a direção de movimento da SNAKE_HEAD.
                      * Pra isso precisamos etender a ordem de renderização da matriz:
@@ -126,6 +130,13 @@ void start_tick_loop(int frequency)
                         matriz[i][j + 1] = 1;
                     }
 
+                    /*
+                     * Entendendo que já estamos na condição true para identificação da HEAD,
+                     */
+                    if (i == 0 || i == 39 || j == 0 || j == 39) {
+                        gameOver = true;
+                    }
+
                     /**
                      * Quando encontramos a SNAKE_HEAD precisamos parar de procurá-la na matriz.
                      * Como estamos em um for(j) dentro de outro for(i), precisamos definir
@@ -139,10 +150,14 @@ void start_tick_loop(int frequency)
                  * Ao sair do for(j) sinalizando o found = true, então ele será verificado no for(i) que também
                  * forçará sua saída.
                  ***/
-                if (found) break;
+                if (found || gameOver) break;
             }
         }
 
+        if (gameOver) {
+            printf("=====================GAME OVER!================\n");
+            abort();
+        }
         /**
          * Aqui estamos desenhando o mapa que é uma matriz 40x40.
          * As células vazias são as células que não contém partes da SNAKE, ou paredes e frutinhas que ainda
@@ -157,7 +172,11 @@ void start_tick_loop(int frequency)
                  * Aqui precisamos apenas renderizar a SNAKE_HEAD na matriz do mapa:
                  ***/
                 if (matriz[i][j] ==  SNAKE_HEAD) {
-                    printf("\033[42m H \033[0m");
+                    printf("\033[42m  \033[0m");
+                } else if (i == 0 || i == 39) {
+                    printf("\033[45m ✜\033[0m");
+                } else if (j == 0 || j == 39) {
+                    printf("\033[45m ✜\033[0m");
                 } else {
                     printf("  ");
                 }
@@ -165,6 +184,7 @@ void start_tick_loop(int frequency)
             }
             printf("\n");
         }
+
 
         fflush(stdout);
         nanosleep(&sleep_time, NULL);
@@ -178,7 +198,7 @@ int escolheDificuldade() {
         char name[10];
     };
 
-    struct MenuItem items[4] = { {1, "Facil"}, {3, "Medio"}, {10, "Dificil"}, {15, "Extreme"} };
+    struct MenuItem items[4] = { {5, "Facil"}, {13, "Medio"}, {15, "Dificil"}, {40, "Extreme"} };
     int dificuldade = 0;
 
     for (int i = 1; i <= 4; i++) {
@@ -204,6 +224,9 @@ int escolheDificuldade() {
 int main()
 {
     limpaTela();
+    system("osascript -e 'tell application \"Terminal\" to set bounds of front window to {0, 0, 2560, 1600}'");
+
+
     int dificuldade;
 
     dificuldade = escolheDificuldade();
