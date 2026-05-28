@@ -4,20 +4,21 @@
 #include <time.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <string.h>
 
-#define FPS 30
-#define GAME_TICK 8
+#define FPS 120
+#define GAME_TICK 10
 
 #define FRAME_TIME_US (1000000 / FPS)
 #define GAME_TIME_US  (1000000 / GAME_TICK)
 
-#define MAP_SIZE_X 120
+#define MAP_SIZE_X 60
 #define MAP_SIZE_Y 30
 
 #define MAP_OFFSET_X 1
 #define MAP_OFFSET_Y 6
 
-#define SNAKE_SLOTS ((MAP_SIZE_X - 2) * (MAP_SIZE_Y - 2))
+#define MAX_SNAKE_SIZE ((MAP_SIZE_X - 2) * (MAP_SIZE_Y - 2))
 
 enum ELEMENTS {
     EMPTY_SPACE_ID,
@@ -30,6 +31,8 @@ enum ELEMENTS {
     SNAKE_HEAD_ID,
     SNAKE_HEAD_CLOSE_FOOD_ID,
     SNAKE_BODY_ID,
+    SNAKE_BODY_ALT_ID,
+    SNAKE_BODY_EXPANDED_ID,
     FOOD_ID
 };
 
@@ -48,8 +51,9 @@ typedef struct {
 typedef struct {
     int map[MAP_SIZE_Y][MAP_SIZE_X];
 
-    Position snake[SNAKE_SLOTS];
+    Position snake[MAX_SNAKE_SIZE];
     int snake_size;
+    Position snake_body_expanded[4];
 
     Position food;
 
@@ -133,8 +137,12 @@ bool wouldCollideWithBody(GameState *game, Position next_head, bool will_grow)
      */
     int limit = game->snake_size;
 
-    if (!will_grow) {
+    if (! will_grow) {
         limit = game->snake_size - 1;
+    }
+
+    if (limit < 4) {
+        return false;
     }
 
     for (int i = 1; i < limit; i++) {
@@ -200,14 +208,31 @@ void generateSnake(GameState *game)
 {
     for (int i = 0; i < game->snake_size; i++) {
         Position position = game->snake[i];
-
         if (i == 0) {
             game->map[position.y][position.x] = isCloseToFood(game)
                 ? SNAKE_HEAD_CLOSE_FOOD_ID
                 : SNAKE_HEAD_ID;
         } else {
-            game->map[position.y][position.x] = SNAKE_BODY_ID;
+            game->map[position.y][position.x] = samePosition(position, game->snake_body_expanded[0])
+                ? SNAKE_BODY_EXPANDED_ID
+                : (i % 2 == 0 ) ? SNAKE_BODY_ID : SNAKE_BODY_ALT_ID;
         }
+    }
+}
+
+void clearExpandedBody(GameState *game) {
+    bool isSamePosition = false;
+
+    for (int i = 0; i < 4; i++) {
+        for (int j =0; j < game->snake_size; j++) {
+            if (samePosition(game->snake_body_expanded[i], game->snake[j])) {
+                isSamePosition = true;
+            }
+        }
+    }
+
+    if (! isSamePosition) {
+        memset(game->snake_body_expanded, 0, sizeof(game->snake_body_expanded));
     }
 }
 
@@ -217,6 +242,7 @@ void buildMap(GameState *game)
     generateWalls(game);
     generateFood(game);
     generateSnake(game);
+    clearExpandedBody(game);
 }
 
 void moveSnake(GameState *game)
@@ -225,14 +251,18 @@ void moveSnake(GameState *game)
 
     bool will_grow = samePosition(next_head, game->food);
 
+    if (will_grow) {
+        game->snake_body_expanded[0] = next_head;
+    }
+
     if (isWall(next_head) || wouldCollideWithBody(game, next_head, will_grow)) {
-        game->game_over = true;
-        game->running = false;
+        // game->game_over = true;
+        // game->running = false;
         return;
     }
 
     if (will_grow) {
-        if (game->snake_size < SNAKE_SLOTS) {
+        if (game->snake_size < MAX_SNAKE_SIZE) {
             game->snake_size++;
         }
 
@@ -305,7 +335,7 @@ void handleInput(GameState *game)
 
 void drawScreen(GameState *game)
 {
-    const char *elements[11] = {
+    const char *elements[13] = {
         [EMPTY_SPACE_ID] = ".",
         [TOP_LEFT_CORNER_ID] = "╔",
         [TOP_RIGHT_CORNER_ID] = "╗",
@@ -314,9 +344,11 @@ void drawScreen(GameState *game)
         [HORIZONTAL_BORDER_ID] = "═",
         [VERTICAL_BORDER_ID] = "║",
         [SNAKE_HEAD_ID] = "O",
-        [SNAKE_HEAD_CLOSE_FOOD_ID] = "P",
+        [SNAKE_HEAD_CLOSE_FOOD_ID] = "Y",
         [SNAKE_BODY_ID] = "o",
-        [FOOD_ID] = "Q",
+        [SNAKE_BODY_ALT_ID] = "O",
+        [SNAKE_BODY_EXPANDED_ID] = "@",
+        [FOOD_ID] = "X",
     };
 
     for (int y = 0; y < MAP_SIZE_Y; y++) {
@@ -350,12 +382,12 @@ void initSnake(GameState *game)
     int snake_x = random_int(5, MAP_SIZE_X - 6);
     int snake_y = random_int(5, MAP_SIZE_Y - 6);
 
-    game->snake_size = 3;
+    game->snake_size = 50;
     game->direction = DIRECTION_LEFT;
 
-    game->snake[0] = (Position){ .x = snake_x,     .y = snake_y };
-    game->snake[1] = (Position){ .x = snake_x + 1, .y = snake_y };
-    game->snake[2] = (Position){ .x = snake_x + 2, .y = snake_y };
+    for (int i = 0; i < game->snake_size; i++) {
+        game->snake[i] = (Position){ .x = snake_x + i, .y = snake_y };
+    }
 }
 
 void initGame(GameState *game)
